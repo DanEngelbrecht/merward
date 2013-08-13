@@ -12,6 +12,11 @@ gitexe = 'C:\\Program Files (x86)\\Git\\bin\\git.exe'
 
 obsoleteReleases = ['releases/1.1.x', 'releases/2.0.x', 'releases/2.1.x', 'releases/2.2.x', 'releases/2.3.x', 'releases/2.4.x', 'releases/2.5.x', 'releases/2.6.x', 'releases/2.7.x']
 
+featureTemplate = 'releases/{0}.{1}.x'
+
+masterBranchName = 'develop'
+
+
 def cmd(args):
     try:
         logging.info('Executing: ' + str(args))
@@ -33,9 +38,10 @@ def getFeatureParents(releasename, releases):
     minorNum = int(minor)
 
     nextMinor = minorNum + 1
-    nextMajor = majorNum + 1    
-    nextMinorFeature = 'releases/' + str(majorNum) + '.' + str(nextMinor) + '.x'
-    nextMajorFeature = 'releases/' + str(nextMajor) + '.' + str(0) + '.x' 
+    nextMajor = majorNum + 1
+    
+    nextMinorFeature = featureTemplate.format(majorNum, nextMinor) 
+    nextMajorFeature = featureTemplate.format(nextMajor, 0) 
     
     minorExists = nextMinorFeature in releases 
     majorExists = nextMajorFeature in releases 
@@ -44,20 +50,20 @@ def getFeatureParents(releasename, releases):
         if minorExists:
             parents.append(nextMinorFeature)
             nextMinor = nextMinor + 1
-            nextMinorFeature = 'releases/' + str(majorNum) + '.' + str(nextMinor) + '.x'
+            nextMinorFeature = featureTemplate.format(majorNum, nextMinor) 
             minorExists = nextMinorFeature in releases 
         else:
             parents.append(nextMajorFeature)
             majorNum = nextMajor
             nextMinor = 1
             nextMajor = nextMajor + 1
-            nextMinorFeature = 'releases/' + str(majorNum) + '.' + str(nextMinor) + '.x'
-            nextMajorFeature = 'releases/' + str(nextMajor) + '.' + str(0) + '.x' 
+            nextMinorFeature = featureTemplate.format(majorNum, nextMinor) 
+            nextMajorFeature = featureTemplate.format(nextMajor, 0) 
             minorExists = nextMinorFeature in releases 
             majorExists = nextMajorFeature in releases 
 
-    if 'develop' in releases:
-        parents.append('develop')
+    if masterBranchName in releases:
+        parents.append(masterBranchName)
 
     return parents;
 
@@ -67,7 +73,7 @@ def getHotpatchParents(releasename, releases):
     prefix, version = releasename.split('/')
     major,minor,patch,p,customer = version.split('.')
     
-    parentName = prefix + '/' + major + '.' + minor + '.x'
+    parentName = featureTemplate.format(major, minor)
     
     if parentName in releases:
         parents.append(parentName)
@@ -78,8 +84,8 @@ def getHotpatchParents(releasename, releases):
 def getOnboardingParents(releasename, releases):
     parents = list()
     
-    if 'develop' in releases:
-        parents.append('develop')
+    if masterBranchName in releases:
+        parents.append(masterBranchName)
 
     return parents;
 
@@ -111,7 +117,7 @@ def isFeatureBranch(branchName):
         return False
     
 def isDevelopBranch(branchName):
-    return branchName == 'develop' 
+    return branchName == masterBranchName 
 
 def getVersionNumber(branchName):
     if isDevelopBranch(branchName):
@@ -162,19 +168,14 @@ features = set()
 hotpatches = set()
 onboardings = set()
 
-if 'develop' in allbranchesoutput:
-    releases.append('develop')
-
-iterator = featureBranchPattern.finditer(allbranchesoutput)
+if masterBranchName in allbranchesoutput:
+    releases.append(masterBranchName)
 
 logging.info('Skipping obsolete branches:\n' + str(obsoleteReleases) + '\n')
 
+iterator = featureBranchPattern.finditer(allbranchesoutput)
 for match in iterator:
     releasename = match.group()
-    prefix, version = releasename.split('/')
-    major,minor,rest = version.split('.')
-    majorNum = int(major)
-    minorNum = int(minor)
     if releasename not in obsoleteReleases:
         features.add(releasename)
 
@@ -241,7 +242,7 @@ for o in sortedOnboardings:
     logging.info(o)
 logging.info('\n') 
 
-logging.info('Offers:')
+logging.info('Forwards:')
 for r in forwardMap:
     logging.info(r + ' -> ' + str(sorted(forwardMap[r], versionCompare)))
 logging.info('\n') 
