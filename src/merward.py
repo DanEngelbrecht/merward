@@ -3,24 +3,55 @@
 import logging
 import subprocess
 import re
+from sys import exit
+import platform
 
-featureBranchPattern = re.compile('releases/[\d]+\.[\d]+\.x')
-hotpatchBranchPattern = re.compile('releases/[\d]+\.[\d]+\.[\d]+\.p.[\w]+')
-onboardingBranchPattern = re.compile('onboarding/[\w]+')
+kUseHardcodedBranches = False
+kUseHardcodedMissingMerges = False
 
-gitexe = 'C:\\Program Files (x86)\\Git\\bin\\git.exe'
+kFeatureBranchPattern = re.compile('releases/[\d]+\.[\d]+\.x')
+kHotpatchBranchPattern = re.compile('releases/[\d]+\.[\d]+\.[\d]+\.p.[\w]+')
+kOnboardingBranchPattern = re.compile('onboarding/[\w]+')
+kMasterBranchName = 'develop'
 
-obsoleteReleases = ['releases/1.1.x', 'releases/2.0.x', 'releases/2.1.x', 'releases/2.2.x', 'releases/2.3.x', 'releases/2.4.x', 'releases/2.5.x', 'releases/2.6.x', 'releases/2.7.x']
+kFeatureTemplate = 'releases/{0}.{1}.x'
+kHotpatchTemplate = 'releases/{0}.{1}.{2}.p.{3}'
+kOnboardingTemplate = 'onboarding/{0}'
 
-featureTemplate = 'releases/{0}.{1}.x'
+system = platform.system()
 
-masterBranchName = 'develop'
+kGitexe = ''
+kLoggingOutputFileName = ''
+
+if system == 'Windows':
+    kLoggingOutputFileName = 'C:\\tmp\\merward.log'
+    kGitexe = 'C:\\Program Files (x86)\\Git\\bin\\git.exe'
+elif system == 'Linux':
+    kGitexe = '/usr/bin/git'
+    kLoggingOutputFileName = '/home/dan/merward.log'
+
+kObsoleteReleases = [kFeatureTemplate.format(1,1)]
+#, kFeatureTemplate.format(2,0), kFeatureTemplate.format(2,1), kFeatureTemplate.format(2,2), kFeatureTemplate.format(2,3), kFeatureTemplate.format(2,4), kFeatureTemplate.format(2,5), kFeatureTemplate.format(2,6), kFeatureTemplate.format(2,7)]
+
+def getHardcodedBranches():
+    features = [kFeatureTemplate.format(2,11), kFeatureTemplate.format(2,12), kFeatureTemplate.format(2,13)]
+    hotpatches = [kHotpatchTemplate.format(2,11,1,'OneCustomer'), kHotpatchTemplate.format(2,11,2,'OtherCustomer'), kHotpatchTemplate.format(2,13,7,'OtherCustomer')]
+    onboardings = [kOnboardingTemplate.format('OtherCustomer')]
+    return features, hotpatches, onboardings
+
+def getHardcodedMissingMerges():
+    missingMerges = dict()
+    missingMerges[features[0]] = [hotpatches[0], hotpatches[1]]
+    missingMerges[features[2]] = [hotpatches[2]]
+    missingMerges[kMasterBranchName] = [onboardings[0]]
+    return missingMerges
+    
 
 
 def cmd(args):
     try:
         logging.info('Executing: ' + str(args))
-        output = subprocess.check_output(args, stderr=subprocess.STDOUT, shell=True)
+        output = subprocess.check_output(args, stderr=subprocess.STDOUT)
         logging.info('= ' + output)
         return output
     except subprocess.CalledProcessError as e:
@@ -31,8 +62,8 @@ def cmd(args):
 def getFeatureParents(releasename, releases):
     parents = list()
     
-    prefix, version = releasename.split('/')
-    major,minor,x = version.split('.')
+    _, version = releasename.split('/')
+    major,minor,_ = version.split('.')
     
     majorNum = int(major)
     minorNum = int(minor)
@@ -40,8 +71,8 @@ def getFeatureParents(releasename, releases):
     nextMinor = minorNum + 1
     nextMajor = majorNum + 1
     
-    nextMinorFeature = featureTemplate.format(majorNum, nextMinor) 
-    nextMajorFeature = featureTemplate.format(nextMajor, 0) 
+    nextMinorFeature = kFeatureTemplate.format(majorNum, nextMinor) 
+    nextMajorFeature = kFeatureTemplate.format(nextMajor, 0) 
     
     minorExists = nextMinorFeature in releases 
     majorExists = nextMajorFeature in releases 
@@ -50,30 +81,30 @@ def getFeatureParents(releasename, releases):
         if minorExists:
             parents.append(nextMinorFeature)
             nextMinor = nextMinor + 1
-            nextMinorFeature = featureTemplate.format(majorNum, nextMinor) 
+            nextMinorFeature = kFeatureTemplate.format(majorNum, nextMinor) 
             minorExists = nextMinorFeature in releases 
         else:
             parents.append(nextMajorFeature)
             majorNum = nextMajor
             nextMinor = 1
             nextMajor = nextMajor + 1
-            nextMinorFeature = featureTemplate.format(majorNum, nextMinor) 
-            nextMajorFeature = featureTemplate.format(nextMajor, 0) 
+            nextMinorFeature = kFeatureTemplate.format(majorNum, nextMinor) 
+            nextMajorFeature = kFeatureTemplate.format(nextMajor, 0) 
             minorExists = nextMinorFeature in releases 
             majorExists = nextMajorFeature in releases 
 
-    if masterBranchName in releases:
-        parents.append(masterBranchName)
+    if kMasterBranchName in releases:
+        parents.append(kMasterBranchName)
 
     return parents;
 
 def getHotpatchParents(releasename, releases):
     parents = list()
     
-    prefix, version = releasename.split('/')
-    major,minor,patch,p,customer = version.split('.')
+    _, version = releasename.split('/')
+    major,minor, _, _, _ = version.split('.')
     
-    parentName = featureTemplate.format(major, minor)
+    parentName = kFeatureTemplate.format(major, minor)
     
     if parentName in releases:
         parents.append(parentName)
@@ -84,8 +115,8 @@ def getHotpatchParents(releasename, releases):
 def getOnboardingParents(releasename, releases):
     parents = list()
     
-    if masterBranchName in releases:
-        parents.append(masterBranchName)
+    if kMasterBranchName in releases:
+        parents.append(kMasterBranchName)
 
     return parents;
 
@@ -99,25 +130,25 @@ def addRequirement(offerer, requirers, backwardsMap):
             backwardsMap[requierer] = [offerer]
 
 def isOnboardingBranch(branchName):
-    if re.match(onboardingBranchPattern, branchName):
+    if re.match(kOnboardingBranchPattern, branchName):
         return True
     else:
         return False
 
 def isHotpatchBranch(branchName):
-    if re.match(hotpatchBranchPattern, branchName):
+    if re.match(kHotpatchBranchPattern, branchName):
         return True
     else:
         return False
 
 def isFeatureBranch(branchName):
-    if re.match(featureBranchPattern, branchName):
+    if re.match(kFeatureBranchPattern, branchName):
         return True
     else:
         return False
     
 def isDevelopBranch(branchName):
-    return branchName == masterBranchName 
+    return branchName == kMasterBranchName 
 
 def getVersionNumber(branchName):
     if isDevelopBranch(branchName):
@@ -125,14 +156,14 @@ def getVersionNumber(branchName):
     elif isOnboardingBranch(branchName):
         return 0xfff000000
     elif isFeatureBranch(branchName):
-        prefix, version = branchName.split('/')
-        major,minor,rest = version.split('.')
+        _, version = branchName.split('/')
+        major, minor, _ = version.split('.')
         majorNum = int(major)
         minorNum = int(minor)
         return (majorNum << 24) + (minorNum << 12) + 0xfff
     elif isHotpatchBranch(branchName):
-        prefix, version = branchName.split('/')
-        major,minor,patch,p,customer = version.split('.')
+        _, version = branchName.split('/')
+        major, minor, patch, _, _ = version.split('.')
         majorNum = int(major)
         minorNum = int(minor)
         patchNum = int(patch)
@@ -155,92 +186,164 @@ def versionCompare(x ,y):
     else:
         return 1
 
+def getAllBranches(useHardcodedBranches):
+    if useHardcodedBranches:
+        return getHardcodedBranches()
+    
+    cmd([kGitexe, "fetch", "--all"])
 
-logging.basicConfig(filename='C:\\tmp\\merward.log',level=logging.DEBUG)
+    allbranchesoutput = cmd([kGitexe, "branch", "-r"])
 
-fetchoutput = cmd([gitexe, "fetch", "--all"])
+    features = set()
+    hotpatches = set()
+    onboardings = set()
 
-allbranchesoutput = cmd([gitexe, "branch", "-r"])
+    logging.info('Skipping obsolete branches:\n' + str(kObsoleteReleases) + '\n')
+    
+    iterator = kFeatureBranchPattern.finditer(allbranchesoutput)
+    for match in iterator:
+        releasename = match.group()
+        if releasename not in kObsoleteReleases:
+            features.add(releasename)
+    
+    iterator = kHotpatchBranchPattern.finditer(allbranchesoutput)
+    for match in iterator:
+        releasename = match.group()
+        if releasename not in kObsoleteReleases:
+            hotpatches.add(releasename)
+    
+    iterator = kOnboardingBranchPattern.finditer(allbranchesoutput)
+    for match in iterator:
+        releasename = match.group()
+        if releasename not in kObsoleteReleases:
+            onboardings.add(releasename)
+    
+    return features, hotpatches, onboardings
 
-releases = []
+def getBranchMapping(releases, features, hotpatches, onboardings):
+    forwardMap = dict()
+    backwardsMap = dict()
+    
+    for f in features:
+        parentPath = getFeatureParents(f, releases)
+        addRequirement(f, parentPath, backwardsMap)
+        forwardMap[f] = parentPath
+    
+    for h in hotpatches:
+        parentPath = getHotpatchParents(h, releases)
+        addRequirement(h, parentPath, backwardsMap)
+        forwardMap[h] = parentPath
+    
+    for o in onboardings:
+        parentPath = getOnboardingParents(o, releases)
+        addRequirement(o, parentPath, backwardsMap)
+        forwardMap[o] = parentPath
+
+    return forwardMap, backwardsMap
+
+def logSortedBranchSet(title, branches):
+    logging.info(title + ' branches:') 
+    sortedBranches = list(branches)
+    sortedBranches = sorted(sortedBranches, versionCompare)
+    for f in sortedBranches:
+        logging.info(f)
+    
+def calculateMissingMerges(useHardcodedMissingMerges, releases, backwardsMap):
+
+    if useHardcodedMissingMerges:
+        return getHardcodedMissingMerges()
+
+    missingMerges = dict()
+    
+    releaseCount = len(releases)
+    releaseIndex = 0
+    
+    for r in releases:
+        print "Checking (" + str((100 * releaseIndex) / releaseCount) + "%): " + r
+        releaseIndex = releaseIndex + 1
+        logging.info("Checking out: " + r)
+        cmd([kGitexe, "checkout", "-f", r])
+    
+        logging.info("Resetting: " + r)
+        cmd([kGitexe, 'reset', '--hard', 'origin/'+r])
+        if r in backwardsMap:
+            unmergedOutput = cmd([kGitexe, 'branch', '--no-merged'])
+            missing = []
+            for require in sorted(backwardsMap[r], versionCompare):
+                if require in unmergedOutput:
+                    missing.append(require)
+            if missing:
+                logging.info("Missing merges for " + r + ":\n" + str(missing))
+                missingMerges[r] = missing
+            else:
+                logging.info("No missing merges for " + r)
+        else:
+            logging.info("No merge requirements for " + r)
+        logging.info('')
+        
+    return missingMerges
+
+def buildMergeMap(missingMerges, forwardMap):
+    mergeMap = {}
+    for m in missingMerges:
+        mergeMap[m] = set(missingMerges[m])
+        if m in forwardMap:
+            forwardMerges = forwardMap[m]
+            s = m 
+            for f in forwardMerges:
+                if f in mergeMap:
+                    mergeMap[f].add(s)
+                else:
+                    mergeMap[f] = {s}
+                s = f
+    return mergeMap
+
+def outputOutputCmdSequence(mergeMap):
+    mergeOrder = sorted(list(mergeMap.keys()), versionCompare)
+
+    print "Make up to date with: "
+    print "----------------------"
+    
+    for b in mergeOrder:
+        print "git checkout -f " + b
+        for m in sorted(list(mergeMap[b]), versionCompare):
+            print "merge " + m
+        print "git push origin " +b
+
+    print "----------------------"
+
+
+
+########################################################################
+
+logging.basicConfig(filename=kLoggingOutputFileName,level=logging.DEBUG)
 
 features = set()
 hotpatches = set()
 onboardings = set()
 
-if masterBranchName in allbranchesoutput:
-    releases.append(masterBranchName)
+features, hotpatches, onboardings = getAllBranches(kUseHardcodedBranches)
 
-logging.info('Skipping obsolete branches:\n' + str(obsoleteReleases) + '\n')
-
-iterator = featureBranchPattern.finditer(allbranchesoutput)
-for match in iterator:
-    releasename = match.group()
-    if releasename not in obsoleteReleases:
-        features.add(releasename)
-
-iterator = hotpatchBranchPattern.finditer(allbranchesoutput)
-for match in iterator:
-    releasename = match.group()
-    if releasename not in obsoleteReleases:
-        hotpatches.add(releasename)
-
-iterator = onboardingBranchPattern.finditer(allbranchesoutput)
-for match in iterator:
-    releasename = match.group()
-    if releasename not in obsoleteReleases:
-        onboardings.add(releasename)
-
+releases = []
+releases.append(kMasterBranchName)
 releases.extend(features.__iter__())
 releases.extend(hotpatches.__iter__())
 releases.extend(onboardings.__iter__())
 
-releases = sorted(releases, versionCompare)
-
-forwardMap = dict()
-backwardsMap = dict()
-
-for f in features:
-    parentPath = getFeatureParents(f, releases)
-    addRequirement(f, parentPath, backwardsMap)
-    forwardMap[f] = parentPath
-
-for h in hotpatches:
-    parentPath = getHotpatchParents(h, releases)
-    addRequirement(h, parentPath, backwardsMap)
-    forwardMap[h] = parentPath
-
-for o in onboardings:
-    parentPath = getOnboardingParents(o, releases)
-    addRequirement(o, parentPath, backwardsMap)
-    forwardMap[o] = parentPath
+forwardMap, backwardsMap = getBranchMapping(releases, features, hotpatches, onboardings)
     
+missingMerges = dict()
+
+releases = sorted(releases, versionCompare)
 
 logging.info('Releases:') 
 for r in releases:
     logging.info(r)
 logging.info('\n') 
 
-logging.info('Feature branches:') 
-sortedFeatures = list(features)
-sortedFeatures = sorted(sortedFeatures, versionCompare)
-for f in sortedFeatures:
-    logging.info(f)
-logging.info('\n') 
-
-logging.info('Hotpatch branches:')
-sortedHotpatches = list(hotpatches)
-sortedHotpatches = sorted(sortedHotpatches, versionCompare)
-for h in sortedHotpatches:
-    logging.info(h)
-logging.info('\n') 
-
-logging.info('Onboarding branches:')
-sortedOnboardings = list(onboardings)
-sortedOnboardings = sorted(sortedOnboardings, versionCompare)
-for o in sortedOnboardings:
-    logging.info(o)
-logging.info('\n') 
+logSortedBranchSet('Feature' ,features)
+logSortedBranchSet('Hotpatch', hotpatches)
+logSortedBranchSet('Onboarding', onboardings)
 
 logging.info('Forwards:')
 for r in forwardMap:
@@ -252,23 +355,20 @@ for r in backwardsMap:
     logging.info(r + ' <- ' + str(sorted(backwardsMap[r], versionCompare)))
 logging.info('\n') 
 
-for r in releases:
-    logging.info("Checking out: " + r)
-    cmd([gitexe, "checkout", "-f", r])
+missingMerges = calculateMissingMerges(kUseHardcodedMissingMerges, releases, backwardsMap)
 
-    logging.info("Resetting: " + r)
-    cmd([gitexe, 'reset', '--hard', 'origin/'+r])
-    if r in backwardsMap:
-        unmergedOutput = cmd([gitexe, 'branch', '--no-merged'])
-        missing = []
-        for require in sorted(backwardsMap[r], versionCompare):
-            if require in unmergedOutput:
-                missing.append(require)
-        if missing:
-            logging.info("Missing merges for " + r + ":\n" + str(missing))
-            print r + ": " + str(missing)
-        else:
-            logging.info("No missing merges for " + r)
-    else:
-        logging.info("No merge requirements for " + r)
-    logging.info('')
+if missingMerges:
+    print "Checking (100%): Missing merges:"
+    for r in releases:
+        if r in missingMerges:
+            print "    " + r + ': ' + str(missingMerges[r])
+
+    print
+
+    mergeMap = buildMergeMap(missingMerges, forwardMap)
+    outputOutputCmdSequence(mergeMap)
+    
+    exit(1)
+else:
+    print "Checking (100%)"
+    exit(0)
