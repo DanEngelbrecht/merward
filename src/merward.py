@@ -9,13 +9,17 @@ import platform
 # Could use "optimistic" branch checking...
 # Only checkout branches affected by updated branches in fetch output
 
+kResetBranches = True
 kUseHardcodedBranches = False
 kUseHardcodedMissingMerges = False
+
+kMasterBranchName = 'develop'
 
 kFeatureBranchPattern = re.compile('releases/[\d]+\.[\d]+\.x')
 kHotpatchBranchPattern = re.compile('releases/[\d]+\.[\d]+\.[\d]+\.p.[\w]+')
 kOnboardingBranchPattern = re.compile('onboarding/[\w]+')
-kMasterBranchName = 'develop'
+
+kDirtyBranchPattern = re.compile(' Your branch ')
 
 kFeatureTemplate = 'releases/{0}.{1}.x'
 kHotpatchTemplate = 'releases/{0}.{1}.{2}.p.{3}'
@@ -251,6 +255,15 @@ def logSortedBranchSet(title, branches):
     for f in sortedBranches:
         logging.info(f)
     
+def getBranch(r):
+    logging.info("Checking out: " + r)
+    checkoutOutput = cmd([kGitexe, "checkout", "-f", r])
+
+    if kResetBranches:
+        if re.search(kDirtyBranchPattern, checkoutOutput):
+            logging.info("Branch is dirty, resetting to origin/" + r)
+            cmd([kGitexe, 'reset', '--hard', 'origin/'+r])
+
 def calculateMissingMerges(useHardcodedMissingMerges, releases, backwardsMap):
 
     if useHardcodedMissingMerges:
@@ -264,11 +277,9 @@ def calculateMissingMerges(useHardcodedMissingMerges, releases, backwardsMap):
     for r in releases:
         print "Checking (" + str((100 * releaseIndex) / releaseCount) + "%): " + r
         releaseIndex = releaseIndex + 1
-        logging.info("Checking out: " + r)
-        cmd([kGitexe, "checkout", "-f", r])
-    
-        logging.info("Resetting: " + r)
-        cmd([kGitexe, 'reset', '--hard', 'origin/'+r])
+        
+        getBranch(r)
+
         if r in backwardsMap:
             unmergedOutput = cmd([kGitexe, 'branch', '--no-merged'])
             missing = []
