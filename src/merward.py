@@ -6,6 +6,9 @@ import re
 from sys import exit
 import platform
 
+# Could use "optimistic" branch checking...
+# Only checkout branches affected by updated branches in fetch output
+
 kUseHardcodedBranches = False
 kUseHardcodedMissingMerges = False
 
@@ -191,7 +194,7 @@ def getAllBranches(useHardcodedBranches):
         return getHardcodedBranches()
     
     cmd([kGitexe, "fetch", "--all"])
-
+    
     allbranchesoutput = cmd([kGitexe, "branch", "-r"])
 
     features = set()
