@@ -310,7 +310,7 @@ def outputOutputCmdSequence(mergeMap):
     for b in mergeOrder:
         print "git checkout -f " + b
         for m in sorted(list(mergeMap[b]), versionCompare):
-            print "merge " + m
+            print "git merge " + m
         print "git push origin " +b
 
     print "----------------------"
