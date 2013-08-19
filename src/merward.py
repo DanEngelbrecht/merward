@@ -19,7 +19,7 @@ kFeatureBranchPattern = re.compile('releases/[\d]+\.[\d]+\.x')
 kHotpatchBranchPattern = re.compile('releases/[\d]+\.[\d]+\.[\d]+\.p.[\w]+')
 kOnboardingBranchPattern = re.compile('onboarding/[\w]+')
 
-kDirtyBranchPattern = re.compile(' Your branch ')
+kDirtyBranchPattern = re.compile('Your branch ')
 
 kFeatureTemplate = 'releases/{0}.{1}.x'
 kHotpatchTemplate = 'releases/{0}.{1}.{2}.p.{3}'
